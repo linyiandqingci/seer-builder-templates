@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Seer Template</string>
+    <string name="seer_text">Seer 云构建成功</string>
 </resources>

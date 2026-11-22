@@ -12,7 +12,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         TextView tv = new TextView(this);
-        tv.setText("Seer 云构建成功\n" + Build.MODEL);
+        tv.setText(getString(R.string.seer_text) + "\n" + Build.MODEL);
         tv.setTextSize(24);
         tv.setGravity(android.view.Gravity.CENTER);
         setContentView(tv);

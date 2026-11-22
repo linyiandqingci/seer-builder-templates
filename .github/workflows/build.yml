@@ -2,6 +2,8 @@ name: build
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [seer-build]
   push:
     tags:
       - 'v*'
@@ -9,9 +11,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: seer-${{ github.event.client_payload.job || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +31,54 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build debug APK
+      - name: Apply config
+        if: github.event_name != 'repository_dispatch' || github.event.client_payload.mode != 'source'
+        env:
+          CFG: ${{ toJSON(github.event.client_payload.config) }}
+        run: python3 tools/apply_config.py
+
+      - name: Fetch source
+        if: github.event_name == 'repository_dispatch' && github.event.client_payload.mode == 'source'
+        env:
+          SRC: ${{ github.event.client_payload.url }}
+        run: |
+          set -e
+          curl -fL --retry 3 --max-time 300 -o /tmp/src.zip "$SRC"
+          rm -rf /tmp/src && mkdir -p /tmp/src
+          unzip -q /tmp/src.zip -d /tmp/src
+          if [ -f /tmp/src/settings.gradle ]; then
+            ROOT=/tmp/src
+          else
+            ROOT=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -n 1)")
+          fi
+          if [ -z "$ROOT" ] || [ ! -f "$ROOT/settings.gradle" ]; then
+            echo "zip 里没有找到 settings.gradle"; exit 1
+          fi
+          shopt -s dotglob
+          cp -r "$ROOT"/* .
+          ls -la
+
+      - name: Build APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
-          name: seer-template-apk
+          name: seer-apk
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Upload to release
+        if: github.event_name == 'repository_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.client_payload.job }}
+          name: Seer Build ${{ github.event.client_payload.job }}
+          body: |
+            应用：${{ github.event.client_payload.config.name }}
+            包名：${{ github.event.client_payload.config.package }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload tag release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/*.apk
+          files: app/build/outputs/apk/debug/app-debug.apk
