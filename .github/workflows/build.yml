@@ -41,24 +41,9 @@ jobs:
         if: github.event_name == 'repository_dispatch' && github.event.client_payload.mode == 'source'
         env:
           SRC: ${{ github.event.client_payload.url }}
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
         run: |
           set -e
-          echo "来源: $SRC"
-          if echo "$SRC" | grep -qE "^https://github[.]com/${REPO}/releases/download/"; then
-            # 本仓库自己的 release 资产：仓库已转私有，直链不带认证会 404，必须走 gh
-            TAG=$(echo "$SRC" | sed -E 's#.*/releases/download/([^/]+)/.*#\1#')
-            FILE=$(echo "$SRC" | sed -E 's#.*/releases/download/[^/]+/(.+)$#\1#')
-            echo "本仓库 release 拉取: tag=$TAG file=$FILE"
-            rm -rf /tmp/dl && mkdir -p /tmp/dl
-            gh release download "$TAG" --repo "$REPO" --pattern "$FILE" --dir /tmp/dl --clobber
-            cp "/tmp/dl/$FILE" /tmp/src.zip
-          else
-            echo "外部直链拉取"
-            curl -fL --retry 3 --max-time 300 -o /tmp/src.zip "$SRC"
-          fi
-          ls -lh /tmp/src.zip
+          curl -fL --retry 3 --max-time 300 -o /tmp/src.zip "$SRC"
           rm -rf /tmp/src && mkdir -p /tmp/src
           unzip -q /tmp/src.zip -d /tmp/src
           if [ -f /tmp/src/settings.gradle ]; then
